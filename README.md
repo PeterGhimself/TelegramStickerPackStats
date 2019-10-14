@@ -11,18 +11,28 @@ using `virutalenv` with `requirements.txt`.
 4. Before running the script you will need to [get your API id](https://core.telegram.org/api/obtaining_api_id) and then update the configuration file `telegramconfig.py` with your values. Make sure not to commit or publish your credentials. See step 4 regarding 
 this.
 5. **IMPORTANT**: From the root of the repository make sure to run `git update-index --skip-worktree telegramconfig.py` after cloning to ensure that the changes to the config file won't be tracked.
-6. You may need to run `chmod +x getstats.py` to ensure it is executable.
+6. You may need to run `chmod +x sendmsg.py` to ensure it is executable.
 7. You _will_ have to authenticate your account the first time you use the script. You will most likely be asked to input your phone number (formatting example: `+15145555555`) and then type in the code you receive by text message. After having done this once 
 you won't be asked to authenticate like this again. Make sure not to delete the newly generated `.session` file.
 
 ## How to run
 
-### Send message
+- `sendmsg.py`
 
-Send message to yourself:
+### Send a message to a contact
 
-- `./getstats.py`
+Send the default message to yourself:
 
-Or to others in your contacts (they must have a public username):
+- `./sendmsg.py`
 
-- `./getstats.py JohnDoe`
+To your contacts (they must have a public username):
+
+- `./sendmsg.py JohnDoe`
+
+Customize the message:
+
+- `./sendmsg.py JohnDoe "This is my message to you, isn't it?"`
+
+Send it to yourself instead:
+
+- `./sendmsg.py me "This is a message to myself"`
