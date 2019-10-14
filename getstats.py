@@ -9,22 +9,16 @@ import json
 client = TelegramClient(cfg.user['name'], cfg.user['api_id'], cfg.user['api_hash'])
 replies = []
 
-def get_arr_packstats(msg):
-    msgs = msg.split('\n\n')
-    # remove first and last
-    msgs = msgs[1:-1]
-
-    #print('MSGS:', msgs)
-    #print()
-
+def break_down(msgs):
     stats = []
+    raw_vals = []
+
     for m in msgs:
         lines = m.split('\n')
         for l in lines:
             stats.append(l)
 
     stats = stats[:-1]
-    raw_vals = []
 
     for s in stats:
         data = s.split(':')
@@ -33,36 +27,74 @@ def get_arr_packstats(msg):
 
     return raw_vals
 
+def get_arr_packstats(msg):
+    msgs = msg.split('\n\n')
+    # remove first and last
+    msgs = msgs[1:-1]
+
+    return break_down(msgs)
+
+def get_arr_packtop(msg):
+    msgs = msg.split('\n\n')
+    msgs = msgs[:-1]
+
+    return break_down(msgs)
+
 def get_json(arr):
     data = {}
 
-    for i in range(0, (len(arr) - 1)):
-        # to ensure key/value pairs get added correctly
-        if i % 2 == 0:
-            data[arr[i]] = arr[i + 1]
+    # edge case of packtop
+    if '#' in arr[0]:
+        packs = []
+
+        for l in arr:
+            if '#' in l:
+                packs.append(l)
+
+        pack_stats = [[]] * len(packs)
+        # construct nested arrays
+        i = -1
+        for l in arr:
+            if '#' in l:
+                i += 1
+            else:
+                pack_stats[i].append(l)
+
+        i = 0
+        for p in packs:
+            data[p] = pack_stats[i]
+            i += 1
+    else:
+        for i in range(0, (len(arr) - 1)):
+            # to ensure key/value pairs get added correctly
+            if i % 2 == 0:
+                data[arr[i]] = arr[i + 1]
 
     json_data = json.dumps(data)
 
     return json_data
 
-@client.on(events.NewMessage(pattern='Stats for the sticker pack'))
-async def get_packstats(event):
-    #print("new message received")
-    #print(event.message.message)
-    replies.append(event.message.message)
+@client.on(events.NewMessage())
+async def get_stats(event):
+    msg = event.message.message
+    # packstats
+    if 'Stats for the sticker pack' in msg:
+        replies.append(msg)
+    elif 'packtop' in msg:
+        replies.append(msg)
 
 async def main():
     global replies
-    # if no args passed, send message to myself
     recipient = 'Stickers'
-    queries = ['/packstats']
-    sticker_set = 'SpaceConcordia'
+    queries = ['/packstats', '/packtop 100']
+    jsons = ['packstats.json', 'packtop.json']
+    sticker_set = 'SpaceConcordia' #@TODO: pass this as arg to script
 
     result = await client.get_entity(recipient)
     display_name = utils.get_display_name(result)
 
     if len(display_name) > 0:
-        print('found recipient: ' + recipient + ', display name: ' + display_name)
+        print('found recipient: ' + recipient + ', display name: ' + display_name + '\n')
 
     else:
         print('recipient: ' + recipient + ' not found')
@@ -82,11 +114,27 @@ async def main():
     # idk why but either I get duplicates or nothing at all
     replies = list(set(replies))
     pack_stats = get_arr_packstats(replies[-1])
-
     json_data = get_json(pack_stats)
 
-    print('json_data', json_data)
-    print(json_data, file=open('packstats.json', 'w'))
+    print(jsons[0] + ':', json_data)
+    print(json_data, file=open(jsons[0], 'w'))
+    print()
+
+    # send /packtop 100
+    print('sending message: "' + queries[1] + '"')
+
+    await client.send_message(recipient, queries[1])
+    time.sleep(0.5)
+
+    # get responses
+    await client.catch_up()
+
+    pack_top = get_arr_packtop(replies[-1])
+    json_data = get_json(pack_top)
+
+    print(jsons[1] + ':', json_data)
+    print(json_data, file=open(jsons[1], 'w'))
+    #print()
 
 with client:
     client.loop.run_until_complete(main())
