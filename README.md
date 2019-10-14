@@ -17,7 +17,8 @@ you won't be asked to authenticate like this again. Make sure not to delete the 
 
 ## How to run
 
-- `sendmsg.py`
+1. `sendmsg.py`
+2. `getstats.py`
 
 ### Send a message to a contact
 
@@ -36,3 +37,9 @@ Customize the message:
 Send it to yourself instead:
 
 - `./sendmsg.py me "This is a message to myself"`
+
+### Get sticker stats
+
+Get sticker pack stats, save results as `packstats.json`:
+
+- `./getstats.py`
