@@ -1,4 +1,4 @@
-#!/usr/bin/env python3
+#!/usr/bin/env python
 from telethon import TelegramClient
 from telethon import utils
 import telegramconfig as cfg
