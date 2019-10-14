@@ -40,6 +40,16 @@ Send it to yourself instead:
 
 ### Get sticker stats
 
-Get sticker pack stats, save results as `packstats.json`:
+Sends the following queries to the Sticker bot:
+
+- `/packstats` followed by `SpaceConcordia` as the parameter
+- `/packtop 100`
+
+Resulting in the following JSON files being created:
+
+- `packstats.json`
+- `packtop.json`
+
+By running the script like so:
 
 - `./getstats.py`
