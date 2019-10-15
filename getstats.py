@@ -7,6 +7,8 @@ import sys
 import time
 import json
 import re
+import pickle
+import os.path
 
 client = TelegramClient(cfg.user['name'], cfg.user['api_id'], cfg.user['api_hash'])
 replies = []
@@ -131,17 +133,32 @@ async def main():
     queries = ['/packstats', '/packtop 100', '/top 20']
     jsons = ['packstats.json', 'packtop.json', 'top20.json']
     sticker_set = 'SpaceConcordia' #@TODO: pass this as arg to script
+    client_obj_file = './client_obj.dictionary'
+    client_obj = None
 
-    result = await client.get_entity(recipient)
-    #@TODO: log 'result' to file? try to read from file first before calling get_entity
-    # because of potential of raising FloodWaitError
-    display_name = utils.get_display_name(result)
+    # if exists then read client obj from file
+    if os.path.exists(client_obj_file):
+        print('loading existing client obj')
+        with open(client_obj_file, 'rb') as obj_dictionary_file:
+            client_obj = pickle.load(obj_dictionary_file)
+    else: # or request one if we need to
+        print('requesting new client obj')
+        client_obj = await client.get_entity(recipient)
 
-    if len(display_name) > 0:
+    print('client_obj', client_obj)
+
+    # persist object to file for later reuse
+    if not os.path.exists(client_obj_file):
+        print('saving new client obj for later use')
+        with open(client_obj_file, 'wb') as obj_dictionary_file:
+            pickle.dump(client_obj, obj_dictionary_file)
+
+    display_name = utils.get_display_name(client_obj)
+
+    if len(recipient) > 0:
         print('found recipient: ' + recipient + ', display name: ' + display_name + '\n')
-
     else:
-        print('recipient: ' + recipient + ' not found')
+        print('found recipient: ' + recipient + ', display name not found')
 
     print('sending message: "' + queries[0] + '"')
 
