@@ -36,6 +36,8 @@ def break_down(msgs):
 
     return raw_vals
 
+# these functions parse bot responses messages
+# and arrify them so that they can be converted to json
 def get_arr_packstats(msg):
     msgs = msg.split('\n\n')
     # remove first and last
@@ -54,10 +56,11 @@ def get_arr_top20(msg):
     msgs = msg.split('\n')
     return break_down(msgs)
 
+# json-ify the data already in array form
 def get_json(arr):
     data = {}
 
-    # case of packtop
+    # case of packtop and top20
     if '#' in arr[0]:
         packs = []
 
@@ -66,7 +69,8 @@ def get_json(arr):
             if '#' in l:
                 packs.append(l)
 
-        pack_stats = [[]] * len(packs)
+        pack_stats = [[] for i in range(len(packs))]
+
         # construct nested arrays
         i = -1
         for l in arr:
@@ -79,16 +83,6 @@ def get_json(arr):
         for p in packs:
             data[p] = pack_stats[i]
             i += 1
-    # case of top20
-    elif len(arr[0][0]) > 0 and '#' in arr[0][0]:
-        # get stickers
-        stickers = []
-        flat = flatten(arr)
-        for s in flat:
-            if '#' in s:
-                stickers.append(s)
-
-        data = stickers
     # case of packstats
     else:
         for i in range(0, (len(arr) - 1)):
@@ -96,13 +90,28 @@ def get_json(arr):
             if i % 2 == 0:
                 data[arr[i]] = arr[i + 1]
 
-    json_data = json.dumps(data)
+    json_data = json.dumps(data, indent=4)
 
     return json_data
 
+# helper function to insert unicodes into array for top 20
+def merge_unicodes(arr, unicodes):
+    indices = []
+    ctr = 0
+    for i in range(0, len(arr) - 1):
+        if '#' in arr[i]:
+            indices.append(i + 1 + ctr) # insert after '#'
+            ctr += 1 # need to shift next index by amount inserted before it
+
+    i = 0
+    for u in unicodes:
+        arr.insert(indices[i], u)
+        i += 1
+
+    return arr
+
 @client.on(events.NewMessage())
 async def get_stats(event):
-    #print('got stats:', event)
     msg = event.message.message
     # packstats
     if 'Stats for the sticker pack' in msg:
@@ -114,7 +123,6 @@ async def get_stats(event):
     else:
         rest.append(msg)
         path = await message.download_media()
-        print('path', path)
 
 async def main():
     global replies
@@ -170,6 +178,7 @@ async def main():
 
     print(jsons[1] + ':', json_data)
     print(json_data, file=open(jsons[1], 'w'))
+    print()
 
     # send /top 20
     print('sending message: "' + queries[2] + '"')
@@ -178,9 +187,6 @@ async def main():
 
     # synch up again
     await client.catch_up()
-
-    print('replies', replies)
-    print('rest', rest)
 
     # get all messages with the bot
     chat = await client.get_input_entity('Stickers')
@@ -198,41 +204,35 @@ async def main():
     first = first.to_dict()
     total_stickers = first['entities'][0]
     total_stickers = total_stickers['length']
-
     u_codes = []
     top20_stats = []
     i = 0
     # multiply by 2 because every sticker has a corresponding text, and the final message included
     # +1 because the text for the image follows the image itself
     total = (total_stickers * 2) + 1
+    print('getting unicodes for stickers...')
     async for msg in msgs:
-        print(i)
         if i >= total:
             break
         try:
             # skip first message (last one received from bot)
             if i > 0:
+                # the following print statement (msg)
+                # intentionally raises UnicodeEncodeError
+                # which in turn gives us the emoji unicode for a sticker
                 print(msg)
-                print('extract', msg.message)
                 m = get_arr_top20(msg.message)
                 top20_stats.append(m)
-                print('m', m)
         except Exception as e:
-            print(e)
             err = '"' + str(e) + '"'
-            print('err', err)
             u_code = err.partition('encode character')[2]
             u_code = u_code.partition('in position')[0].strip()
-            print('u_code:', u_code)
             u_codes.append(u_code)
-            #print(str(msg).encode(sys.stdout.encoding, errors='replace'))
         i += 1
+    print('done')
+    print('unicodes found:', u_codes)
 
-    print('u_codes', u_codes)
-    print('top20_stats', top20_stats)
-
-    #top20_stats = flatten(top20_stats)
-    #print('top20_stats_flat', top20_stats)
+    top20_stats = merge_unicodes(flatten(top20_stats), u_codes)
     json_data = get_json(top20_stats)
 
     print(jsons[2] + ':', json_data)
