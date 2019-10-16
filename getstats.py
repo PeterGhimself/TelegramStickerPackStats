@@ -1,7 +1,6 @@
 #!/usr/bin/env python
 from telethon import TelegramClient
 from telethon import utils, events
-from telethon.tl.types import InputMessagesFilterPhotos
 from telethon.tl.functions.messages import GetAllStickersRequest
 from telethon.tl.functions.messages import GetStickerSetRequest
 from telethon.tl.types import InputStickerSetID
@@ -17,12 +16,22 @@ client = TelegramClient(cfg.user['name'], cfg.user['api_id'], cfg.user['api_hash
 replies = []
 rest = []
 
+def is_unicode(s):
+    s = str(s)
+    return re.search('\\\\(u|U)\d+\w*\d*', s)
+
+def is_number(s):
+    try:
+        float(s)
+        return True
+    except ValueError:
+        return False
+
 def flatten(l):
     flat_list = [item for sublist in l for item in sublist]
     return flat_list
 
 def break_down(msgs):
-    print('break_down: given msgs', msgs)
     stats = []
     raw_vals = []
 
@@ -30,8 +39,6 @@ def break_down(msgs):
         lines = m.split('\n')
         for l in lines:
             stats.append(l)
-
-    print('stats:', stats)
 
     # skip stats
     if 'Today' in stats[0]:
@@ -43,20 +50,15 @@ def break_down(msgs):
     elif len(stats) > 3:
         stats = stats[:-1]
 
-    print('stats:', stats)
-
     for s in stats:
         data = s.split(':')
         for d in data:
             raw_vals.append(d.strip())
-    print('returning raw_vals:', raw_vals)
 
     return raw_vals
 
 # these functions parse bot responses messages
-# and arrify them so that they can be converted to json
-#@TODO: CLEAN UP the mess in: packstats.json and top20.json
-# where some values end up as keys instead of values to their corresponding keys
+# and clean them so that they can be eventually made into json objects
 def get_arr_packstats(msg):
     msgs = msg.split('\n\n')
     # remove first and last
@@ -81,28 +83,64 @@ def get_arr_stats(msg):
     msgs = str(msgs).split('\\n')
     # acceptance criteria: must be tuple
     pattern = re.compile('(\w+: \d+)|(\w+:\d+)')
-    print('MSGS', msgs)
 
     for m in msgs:
-        #print('m', m)
         if not pattern.match(m):
             msgs.remove(m)
 
-    print('MSGS post for', msgs)
-
     # get rid of random '\\'s
     msgs = list(filter(('\\').__ne__, msgs))
-    print('MSGS post filter', msgs)
 
     # remove '\\'s within good strings
     msgs = [item.replace('\\', '') for item in msgs]
-    print('MSGS post replace', msgs)
 
     return break_down(msgs)
 
+# replace get_json() call on top20_arr with this
+def get_top20_data(arr, token='#'):
+    data = {}
+    ranks = []
+
+    # separate data into lists
+    for i in arr:
+        if '#' in i:
+            ranks.append(i)
+
+    stats = [[] for i in range(len(ranks))]
+
+    pairs = {}
+    skip = False
+    j = -1
+    arr_len = len(arr)
+    for i in range(arr_len):
+        if skip:
+            skip = False
+            continue
+        if '#' in arr[i]:
+            # reset temp obj
+            if j >= 0:
+                stats[j].append(pairs)
+            pairs = {}
+            j += 1
+        elif is_unicode(arr[i]):
+            pairs['unicode'] = arr[i]
+        else:
+            if i >= arr_len - 1:
+                break
+            pairs[arr[i]] = arr[i+1]
+            skip = True
+
+    # once we're done just need to add the data to the last obj
+    stats[j].append(pairs)
+
+    for i in range(len(ranks)):
+        data[ranks[i]] = stats[i]
+
+    json_data = json.dumps(data, indent = 4, sort_keys=True)
+
+    return json_data
+
 def get_nested_data(arr, token='#'):
-    print('given arr:', arr)
-    print('with token', token)
     data = {}
     packs = []
     is_valid = False
@@ -116,17 +154,12 @@ def get_nested_data(arr, token='#'):
             is_valid = False
 
     if not is_valid:
-        print('non-regex mode')
         # get all packs first
         for l in arr:
             if token in l:
                 packs.append(l)
 
-        print('packs', packs)
-
         pack_stats = [[] for i in range(len(packs))]
-
-        print('pack_stats', pack_stats)
 
         # construct nested arrays
         i = -1
@@ -136,26 +169,18 @@ def get_nested_data(arr, token='#'):
             else:
                 pack_stats[i].append(l)
 
-        print('pack_stats', pack_stats)
-
         i = 0
         for p in packs:
             data[p] = pack_stats[i]
             i += 1
 
-        print('data', data)
     else:
-        print('regex mode')
         token = re.compile(token)
         for l in arr:
             if token.search(l):
                 packs.append(l)
 
-        print('packs', packs)
-
         stats = [[] for i in range(len(packs))]
-
-        print('stats', stats)
 
         # construct nested arrays
         i = -1
@@ -164,40 +189,28 @@ def get_nested_data(arr, token='#'):
         pair = {}
         for j in range(arr_len):
             if skip:
-                print('SKIPPING')
                 skip = False
                 continue
-            print('j', j)
-            print('i', i)
 
             if token.search(arr[j]):
-                print('FOUND TOKEN, DOING NOTHING')
                 # reset temp obj
                 if i >= 0:
                     stats[i].append(pair)
-                    print('INSERT pair:', pair)
-                    print('INTO stats[i]:', stats[i])
                 pair = {}
                 i += 1
             else:
                 if j >= arr_len:
-                    print('WE DONE HERE')
                     break
                 pair[arr[j]] = arr[j+1]
-                print('CONSTRUCTING PAIR:', pair)
                 skip = True
 
         # once we're done just need to add the data to the last obj
         stats[i].append(pair)
 
-        print('stats', stats)
-
         i = 0
         for p in packs:
             data[p] = stats[i]
             i += 1
-
-        print('data', data)
 
     return data
 
@@ -208,7 +221,6 @@ def get_json(arr, token='#'):
     if token == False:
         # bypass
         json_data = json.dumps(arr, indent = 4)
-        print('json_data', json_data)
         return json_data
 
     # case of packtop and top20, stats
@@ -216,23 +228,19 @@ def get_json(arr, token='#'):
         data = get_nested_data(arr, token)
     # case of packstats
     else:
-        print('given arr', arr)
         for i in range(0, (len(arr) - 1)):
             # to ensure key/value pairs get added correctly
             if i % 2 == 0:
                 data[arr[i]] = arr[i + 1]
 
-        print('data', data)
-
     json_data = json.dumps(data, indent = 4)
 
-    print('json_data', json_data)
     return json_data
 
-# helper function to insert unicodes into array for top 20
-# default offset set to 1 --> unicode inserted after token
+# helper function to insert array elements into another array
+# default offset set to 1 --> new elements inserted after token
 # set to 0 to insert before token
-def merge_unicodes(arr, unicodes, token, offset = 1):
+def merge(arr, new_arr, token, offset = 1):
     indices = []
     ctr = 0
     for i in range(0, len(arr) - 1):
@@ -241,7 +249,7 @@ def merge_unicodes(arr, unicodes, token, offset = 1):
             ctr += 1 # need to shift next index by amount inserted before it
 
     i = 0
-    for u in unicodes:
+    for u in new_arr:
         arr.insert(indices[i], u)
         i += 1
 
@@ -276,18 +284,18 @@ async def main():
 
     # if exists then read client obj from file
     if os.path.exists(client_obj_file):
-        print('loading existing client obj')
+        print('loading existing client obj\n')
         with open(client_obj_file, 'rb') as obj_dictionary_file:
             client_obj = pickle.load(obj_dictionary_file)
     else: # or request one if we need to
-        print('requesting new client obj')
+        print('requesting new client obj\n')
         client_obj = await client.get_entity(recipient)
 
-    print('client_obj', client_obj)
+    print('client_obj', client_obj, '\n')
 
     # persist object to file for later reuse
     if not os.path.exists(client_obj_file):
-        print('saving new client obj for later use')
+        print('saving new client obj for later use\n')
         with open(client_obj_file, 'wb') as obj_dictionary_file:
             pickle.dump(client_obj, obj_dictionary_file)
 
@@ -296,7 +304,7 @@ async def main():
     if len(recipient) > 0:
         print('found recipient: ' + recipient + ', display name: ' + display_name + '\n')
     else:
-        print('found recipient: ' + recipient + ', display name not found')
+        print('found recipient: ' + recipient + ', display name not found\n')
 
     print('sending message: "' + queries[0] + '"')
 
@@ -365,7 +373,7 @@ async def main():
     # multiply by 2 because every sticker has a corresponding text, and the final message included
     # +1 because the text for the image follows the image itself
     total = (total_stickers * 2) + 1
-    print('getting unicodes for stickers...')
+    print('getting unicodes for stickers...\n')
     async for msg in msgs:
         if i >= total:
             break
@@ -384,11 +392,11 @@ async def main():
             u_code = u_code.partition('in position')[0].strip()
             u_codes.append(u_code)
         i += 1
-    print('done')
-    print('unicodes found:', u_codes)
+    print('done\n')
+    print('unicodes found:', u_codes, '\n')
 
-    top20_stats = merge_unicodes(flatten(top20_stats), u_codes, '#')
-    json_data = get_json(top20_stats)
+    top20_stats = merge(flatten(top20_stats), u_codes, '#')
+    json_data = get_top20_data(top20_stats)
 
     print(jsons[2] + ':', json_data)
     print(json_data, file=open(jsons[2], 'w'))
@@ -404,7 +412,6 @@ async def main():
     for s in sticker_sets.sets:
         if s.short_name == 'SpaceConcordia':
             sticker_set = s
-            print('sticker_set', sticker_set)
 
     # Get the stickers for this sticker set
     stickers = await client(GetStickerSetRequest(
@@ -417,8 +424,8 @@ async def main():
     u_codes = []
     # Stickers are nothing more than files, so send that
     for sticker in stickers.documents:
-        try:
-            print('sticker', sticker)
+        try: # need to throw exception to get unicode
+            print(sticker)
         except Exception as e:
             err = '"' + str(e) + '"'
             u_code = err.partition('encode character')[2]
@@ -435,26 +442,16 @@ async def main():
     time.sleep(0.3)
     # synch up
     await client.catch_up()
-    print('u_codes', u_codes)
 
     total_stickers = len(stickers.documents)
-    print('total_stickers', total_stickers)
-    print('len(replies)', len(replies))
     # get rid of duplicate last response (idk why it's here)
     replies = replies[:-1]
     start_index = len(replies) - total_stickers
-    print('responses_BEFORE', replies)
     responses = replies[start_index:]
-    print('start_index', start_index)
-    print('responses_AFTER', responses)
     stats = get_arr_stats(replies[start_index:])
-    print('stats', stats)
 
-    stats = merge_unicodes(stats, u_codes, 'Today', 0)
+    stats = merge(stats, u_codes, 'Today', 0)
     json_data = get_json(get_nested_data(stats, '\\\\(u|U)\d+\w*\d*'), False)
-    print('json_data', json_data)
-
-    print('final_stats', stats)
 
     print(jsons[3] + ':', json_data)
     print(json_data, file=open(jsons[3], 'w'))
