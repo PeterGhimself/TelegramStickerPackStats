@@ -22,6 +22,7 @@ def flatten(l):
     return flat_list
 
 def break_down(msgs):
+    print('break_down: given msgs', msgs)
     stats = []
     raw_vals = []
 
@@ -30,14 +31,25 @@ def break_down(msgs):
         for l in lines:
             stats.append(l)
 
-    # handle edge case: top 20 should not be affected by this
-    if len(stats) > 3:
+    print('stats:', stats)
+
+    # skip stats
+    if 'Today' in stats[0]:
+        pass
+    # skip packtop 100
+    elif re.search('#\d+ \w+', stats[0]):
+        pass
+    # otherwise for top 20 and packstats pop the tail
+    elif len(stats) > 3:
         stats = stats[:-1]
+
+    print('stats:', stats)
 
     for s in stats:
         data = s.split(':')
         for d in data:
             raw_vals.append(d.strip())
+    print('returning raw_vals:', raw_vals)
 
     return raw_vals
 
@@ -89,11 +101,14 @@ def get_arr_stats(msg):
     return break_down(msgs)
 
 def get_nested_data(arr, token='#'):
+    print('given arr:', arr)
+    print('with token', token)
     data = {}
     packs = []
     is_valid = False
 
     if token != '#':
+        # check to see if token is a valid regex
         try:
             re.compile(token)
             is_valid = True
@@ -101,12 +116,17 @@ def get_nested_data(arr, token='#'):
             is_valid = False
 
     if not is_valid:
+        print('non-regex mode')
         # get all packs first
         for l in arr:
             if token in l:
                 packs.append(l)
 
+        print('packs', packs)
+
         pack_stats = [[] for i in range(len(packs))]
+
+        print('pack_stats', pack_stats)
 
         # construct nested arrays
         i = -1
@@ -116,30 +136,68 @@ def get_nested_data(arr, token='#'):
             else:
                 pack_stats[i].append(l)
 
+        print('pack_stats', pack_stats)
+
         i = 0
         for p in packs:
             data[p] = pack_stats[i]
             i += 1
+
+        print('data', data)
     else:
+        print('regex mode')
         token = re.compile(token)
         for l in arr:
             if token.search(l):
                 packs.append(l)
 
+        print('packs', packs)
+
         stats = [[] for i in range(len(packs))]
+
+        print('stats', stats)
 
         # construct nested arrays
         i = -1
-        for l in arr:
-            if token.search(l):
+        arr_len = len(arr)
+        skip = False
+        pair = {}
+        for j in range(arr_len):
+            if skip:
+                print('SKIPPING')
+                skip = False
+                continue
+            print('j', j)
+            print('i', i)
+
+            if token.search(arr[j]):
+                print('FOUND TOKEN, DOING NOTHING')
+                # reset temp obj
+                if i >= 0:
+                    stats[i].append(pair)
+                    print('INSERT pair:', pair)
+                    print('INTO stats[i]:', stats[i])
+                pair = {}
                 i += 1
             else:
-                stats[i].append(l)
+                if j >= arr_len:
+                    print('WE DONE HERE')
+                    break
+                pair[arr[j]] = arr[j+1]
+                print('CONSTRUCTING PAIR:', pair)
+                skip = True
+
+        # once we're done just need to add the data to the last obj
+        stats[i].append(pair)
+
+        print('stats', stats)
 
         i = 0
         for p in packs:
             data[p] = stats[i]
             i += 1
+
+        print('data', data)
 
     return data
 
@@ -150,20 +208,25 @@ def get_json(arr, token='#'):
     if token == False:
         # bypass
         json_data = json.dumps(arr, indent = 4)
+        print('json_data', json_data)
         return json_data
 
-    # case of packtop and top20
+    # case of packtop and top20, stats
     if token in arr[0]:
         data = get_nested_data(arr, token)
     # case of packstats
     else:
+        print('given arr', arr)
         for i in range(0, (len(arr) - 1)):
             # to ensure key/value pairs get added correctly
             if i % 2 == 0:
                 data[arr[i]] = arr[i + 1]
 
+        print('data', data)
+
     json_data = json.dumps(data, indent = 4)
 
+    print('json_data', json_data)
     return json_data
 
 # helper function to insert unicodes into array for top 20
@@ -236,7 +299,7 @@ async def main():
         print('found recipient: ' + recipient + ', display name not found')
 
     print('sending message: "' + queries[0] + '"')
-    
+
     # send /packstats query
     await client.send_message(recipient, queries[0])
     time.sleep(0.3)
@@ -377,10 +440,13 @@ async def main():
     total_stickers = len(stickers.documents)
     print('total_stickers', total_stickers)
     print('len(replies)', len(replies))
+    # get rid of duplicate last response (idk why it's here)
+    replies = replies[:-1]
     start_index = len(replies) - total_stickers
+    print('responses_BEFORE', replies)
     responses = replies[start_index:]
     print('start_index', start_index)
-    print('responses', responses)
+    print('responses_AFTER', responses)
     stats = get_arr_stats(replies[start_index:])
     print('stats', stats)
 
