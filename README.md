@@ -6,7 +6,8 @@ A script to interact with the `Stickers` bot of Telegram to obtain usage statist
 
 1. Make sure you have [Python 3.5+](https://www.python.org/downloads/) installed. If you are using windows make sure to install [Git Bash](https://git-scm.com/downloads) so you can download the code and have a decent terminal to use.
 2. In a terminal run `git clone https://github.com/PeterGimhself/TelegramStickerPackStats.git`
-3. Run `pip install telethon` to install dependencies. If you're on Linux/Mac then it is recommended to use `virtualenv` to install the required dependencies. See steps 1 and 2 [here](https://github.com/PeterGhimself/BranchListUpdater#linux) for an example of 
+3. Run `pip install telethon` and `pip install emojis` to install dependencies. If you're on Linux/Mac then it is recommended to use `virtualenv` to install the required dependencies. See steps 1 and 2 
+[here](https://github.com/PeterGhimself/BranchListUpdater#linux) for an example of 
 using `virutalenv` with `requirements.txt`.
 4. Before running the script you will need to [get your API id](https://core.telegram.org/api/obtaining_api_id) and then update the configuration file `telegramconfig.py` with your values. Make sure not to commit or publish your credentials. See step 4 regarding 
 this.

@@ -11,10 +11,31 @@ import json
 import re
 import pickle
 import os.path
+import codecs
+import emojis
 
 client = TelegramClient(cfg.user['name'], cfg.user['api_id'], cfg.user['api_hash'])
 replies = []
 rest = []
+
+def get_char(s):
+    return codecs.decode(s, 'unicode_escape')
+
+def get_emoji_name(c):
+    try:
+        print(c)
+    except Exception as e:
+        print('caught exception:')
+        print(str(e))
+
+    emoji_name = 'NOT SUPPORTED BY EMOJIS MODULE'
+    try:
+        emoji_name = emojis.db.get_emoji_by_code(c)[0][0]
+    except Exception as e:
+        print('caught exception:')
+        print(str(e))
+
+    return emoji_name
 
 def is_unicode(s):
     s = str(s)
@@ -116,6 +137,7 @@ def get_top20_data(arr, token='#'):
         if skip:
             skip = False
             continue
+
         if '#' in arr[i]:
             # reset temp obj
             if j >= 0:
@@ -124,6 +146,7 @@ def get_top20_data(arr, token='#'):
             j += 1
         elif is_unicode(arr[i]):
             pairs['unicode'] = arr[i]
+            pairs['emoji'] = get_emoji_name(get_char(arr[i][1:-1]))
         else:
             if i >= arr_len - 1:
                 break
@@ -137,7 +160,6 @@ def get_top20_data(arr, token='#'):
         data[ranks[i]] = stats[i]
 
     json_data = json.dumps(data, indent = 4, sort_keys=True)
-
     return json_data
 
 def get_nested_data(arr, token='#'):
@@ -393,7 +415,7 @@ async def main():
             u_codes.append(u_code)
         i += 1
     print('done\n')
-    print('unicodes found:', u_codes, '\n')
+    print('unicodes found:', u_codes)
 
     top20_stats = merge(flatten(top20_stats), u_codes, '#')
     json_data = get_top20_data(top20_stats)
@@ -427,10 +449,10 @@ async def main():
         try: # need to throw exception to get unicode
             print(sticker)
         except Exception as e:
-            err = '"' + str(e) + '"'
+            err = str(e)
             u_code = err.partition('encode character')[2]
             u_code = u_code.partition('in position')[0].strip()
-            u_codes.append(u_code)
+            u_codes.append(u_code) # remove surround single quotes
 
         await client.send_message(recipient, queries[3])
         time.sleep(0.3)
@@ -438,6 +460,8 @@ async def main():
         time.sleep(0.3)
 
         await client.send_file(recipient, sticker)
+
+    print('u_codes', u_codes)
 
     time.sleep(0.3)
     # synch up
